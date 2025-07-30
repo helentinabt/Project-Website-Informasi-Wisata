@@ -1,0 +1,741 @@
+<?php
+include 'db.php';
+session_start();
+
+if (!isset($_SESSION['admin'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$umkm_data = null;
+$message = '';
+
+if (isset($_GET['id'])) {
+    $id_umkm = mysqli_real_escape_string($conn, $_GET['id']);
+
+    $query_select = "SELECT * FROM umkm WHERE id_umkm='$id_umkm'";
+    $result_select = mysqli_query($conn, $query_select);
+
+    if (!$result_select || mysqli_num_rows($result_select) == 0) {
+        die("Data UMKM tidak ditemukan atau ID tidak valid.");
+    }
+    $umkm_data = mysqli_fetch_assoc($result_select);
+
+} else {
+    die("ID UMKM tidak disediakan untuk diedit.");
+}
+
+if (isset($_POST['submit'])) {
+    $nama = mysqli_real_escape_string($conn, $_POST['nama']);
+    $deskripsi = mysqli_real_escape_string($conn, $_POST['deskripsi']);
+
+    $gambar_nama = $umkm_data['gambar'];
+
+    if (isset($_FILES['gambar']) && $_FILES['gambar']['error'] == 0) {
+        $target_dir = "uploads/";
+        if (!is_dir($target_dir)) {
+            mkdir($target_dir, 0777, true);
+        }
+
+        $gambar_nama_baru = basename($_FILES["gambar"]["name"]);
+        $target_file = $target_dir . $gambar_nama_baru;
+        $imageFileType = strtolower(pathinfo($target_file,PATHINFO_EXTENSION));
+
+        $check = getimagesize($_FILES["gambar"]["tmp_name"]);
+        if($check !== false) {
+            if($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg" && $imageFileType != "gif" ) {
+                $message = "Maaf, hanya file JPG, JPEG, PNG & GIF yang diizinkan.";
+            } else {
+                if (!empty($umkm_data['gambar']) && file_exists($target_dir . $umkm_data['gambar']) && $umkm_data['gambar'] != $gambar_nama_baru) {
+                    unlink($target_dir . $umkm_data['gambar']);
+                }
+                if (move_uploaded_file($_FILES["gambar"]["tmp_name"], $target_file)) {
+                    $gambar_nama = $gambar_nama_baru;
+                    $message .= "Gambar berhasil diunggah. ";
+                } else {
+                    $message .= "Maaf, terjadi kesalahan saat mengunggah gambar. ";
+                }
+            }
+        } else {
+            $message .= "File bukan gambar. ";
+        }
+    }
+
+    $query_update = "UPDATE umkm SET nama='$nama', deskripsi='$deskripsi', gambar='$gambar_nama' WHERE id_umkm='$id_umkm'";
+
+    if (mysqli_query($conn, $query_update)) {
+        $message .= "Data UMKM berhasil diubah!";
+        $umkm_data['nama'] = $nama;
+        $umkm_data['deskripsi'] = $deskripsi;
+        $umkm_data['gambar'] = $gambar_nama;
+
+        echo "<script>alert('" . $message . "'); window.location.href='admin umkm.php';</script>";
+        exit;
+    } else {
+        $message .= "Error: " . mysqli_error($conn);
+        echo "<script>alert('" . $message . "');</script>";
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <title>Edit UMKM - Admin Desa Klero</title>
+  
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --primary-color: #1e8449;
+      --primary-light: #27ae60;
+      --primary-gradient: linear-gradient(135deg,  #27ae60 0%,  #1e8449 100%);
+      --secondary-color: #e8f5e8;
+      --accent-color: #17a2b8;
+      --text-dark: #2c3e50;
+      --text-muted: #6c757d;
+      --border-color: #e9ecef;
+      --success-color: #28a745;
+      --error-color: #dc3545;
+      --warning-color: #ffc107;
+      --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+      --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+      --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #f8fffe 0%, #f0f9f0 100%);
+      min-height: 100vh;
+    }
+
+    .container-fluid {
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 280px;
+      background: var(--primary-gradient);
+      backdrop-filter: blur(10px);
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sidebar::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="rgba(255,255,255,0.03)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+      pointer-events: none;
+    }
+
+    .sidebar-header {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      color: white;
+      padding: 1.5rem;
+      text-align: center;
+      border-radius: 15px;
+      margin: 1.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      position: relative;
+    }
+
+    .sidebar-header h4 {
+      font-weight: 600;
+      font-size: 1.2rem;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .sidebar-header .subtitle {
+      font-size: 0.85rem;
+      opacity: 0.9;
+      margin-top: 0.5rem;
+    }
+
+    .menu {
+      list-style: none;
+      padding: 0 1.5rem;
+      flex-grow: 1;
+    }
+
+    .menu li {
+      margin-bottom: 0.5rem;
+    }
+
+    .menu li a {
+      color: rgba(255, 255, 255, 0.9);
+      text-decoration: none;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      border-radius: 12px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      font-weight: 500;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .menu li a i {
+      margin-right: 0.75rem;
+      width: 20px;
+      text-align: center;
+      font-size: 1.1rem;
+    }
+
+    .menu li a::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s;
+    }
+
+    .menu li a:hover::before {
+      left: 100%;
+    }
+
+    .menu li a:hover,
+    .menu li a.active {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      transform: translateX(5px);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .logout-section {
+      padding: 1.5rem;
+    }
+
+    .logout-btn {
+      background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+      color: white;
+      border: none;
+      padding: 0.875rem 1.5rem;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      box-shadow: var(--shadow-md);
+    }
+
+    .logout-btn i {
+      margin-right: 0.5rem;
+    }
+
+    .logout-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
+      color: white;
+    }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+    }
+
+    .topbar {
+      background: var(--primary-gradient);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      box-shadow: var(--shadow-md);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .profile {
+      font-weight: 600;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 0.5rem 1rem;
+      border-radius: 25px;
+      backdrop-filter: blur(10px);
+      margin-left: auto;
+    }
+
+    .profile i {
+      margin-right: 0.5rem;
+      font-size: 1.2rem;
+    }
+
+    .content {
+      padding: 2rem;
+      flex-grow: 1;
+      overflow-y: auto;
+    }
+
+    .form-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-color);
+      backdrop-filter: blur(10px);
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .page-title {
+      margin-bottom: 2rem;
+      color: var(--text-dark);
+      font-weight: 700;
+      font-size: 2rem;
+      position: relative;
+      padding-bottom: 1rem;
+      text-align: center;
+    }
+
+    .page-title::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60px;
+      height: 4px;
+      background: var(--primary-gradient);
+      border-radius: 2px;
+    }
+
+    .page-title i {
+      margin-right: 0.75rem;
+      color: var(--primary-color);
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      font-size: 0.95rem;
+    }
+
+    .form-label i {
+      margin-right: 0.5rem;
+      color: var(--primary-color);
+      width: 20px;
+    }
+
+    .form-control {
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      padding: 0.875rem 1rem;
+      font-size: 0.95rem;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .form-control:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+      background: white;
+    }
+
+    .form-control::placeholder {
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+
+    textarea.form-control {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .form-text {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+      display: flex;
+      align-items: center;
+    }
+
+    .form-text i {
+      margin-right: 0.375rem;
+      font-size: 0.8rem;
+    }
+
+    .current-image {
+      margin-top: 1rem;
+      text-align: center;
+      padding: 1rem;
+      background: var(--secondary-color);
+      border-radius: 12px;
+      border: 2px solid var(--border-color);
+    }
+
+    .current-image p {
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .current-image p i {
+      margin-right: 0.5rem;
+      color: var(--primary-color);
+    }
+
+    .current-image img {
+      max-width: 250px;
+      height: auto;
+      border-radius: 12px;
+      border: 2px solid var(--border-color);
+      box-shadow: var(--shadow-md);
+      transition: transform 0.3s ease;
+    }
+
+    .current-image img:hover {
+      transform: scale(1.05);
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      display: inline-block;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 1rem;
+    }
+
+    .file-input-custom {
+      display: none;
+    }
+
+    .file-input-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--secondary-color);
+      border: 2px dashed var(--primary-color);
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      color: var(--primary-color);
+      font-weight: 500;
+    }
+
+    .file-input-label:hover {
+      background: rgba(40, 167, 69, 0.1);
+      border-color: var(--primary-dark);
+    }
+
+    .file-input-label i {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      display: block;
+      width: 100%;
+    }
+
+    .submit-btn {
+      background: var(--primary-gradient);
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 200px;
+      box-shadow: var(--shadow-md);
+      margin: 2rem auto 0;
+    }
+
+    .submit-btn i {
+      margin-right: 0.5rem;
+    }
+
+    .submit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    @media (max-width: 768px) {
+      .container-fluid {
+        flex-direction: column;
+        height: auto;
+      }
+      
+      .sidebar {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      
+      .sidebar-header {
+        margin: 1rem;
+      }
+      
+      .menu {
+        padding: 0 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      
+      .menu li {
+        margin-bottom: 0;
+        flex: 1;
+        min-width: 150px;
+      }
+      
+      .logout-section {
+        padding: 1rem;
+      }
+      
+      .logout-btn {
+        width: auto;
+        align-self: center;
+        margin: 0 auto;
+        max-width: 200px;
+      }
+      
+      .content {
+        padding: 1rem;
+      }
+      
+      .form-container {
+        padding: 1.5rem;
+      }
+      
+      .page-title {
+        font-size: 1.5rem;
+      }
+
+      .current-image img {
+        max-width: 200px;
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .content::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .content::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+
+    .content::-webkit-scrollbar-thumb {
+      background: var(--primary-color);
+      border-radius: 10px;
+    }
+
+    .content::-webkit-scrollbar-thumb:hover {
+      background: var(--primary-dark);
+    }
+  </style>
+</head>
+<body>
+  <div class="container-fluid d-flex p-0">
+    <div class="sidebar d-flex flex-column">
+      <div class="flex-grow-1">
+        <div class="sidebar-header">
+          <h4><i class="fas fa-leaf me-2"></i>Admin Desa Klero</h4>
+          <div class="subtitle">Management System</div>
+        </div>
+        <ul class="menu">
+          <li>
+            <a href="admin wisata.php">
+              <i class="fas fa-map-marked-alt"></i>
+              Kelola Wisata
+            </a>
+          </li>
+          <li>
+            <a href="admin umkm.php" class="active">
+              <i class="fas fa-store"></i>
+              Kelola UMKM
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="logout-section">
+        <a href="logout.php" class="logout-btn">
+          <i class="fas fa-sign-out-alt"></i>
+          Log Out
+        </a>
+      </div>
+    </div>
+    <div class="main-content">
+      <div class="topbar">
+        <div class="profile">
+          <i class="fas fa-user-shield"></i>
+          Halo, Admin!
+        </div>
+      </div>
+      <div class="content">
+        <div class="form-container">
+          <h1 class="page-title">
+            <i class="fas fa-edit"></i>Edit UMKM
+          </h1>
+          
+          <form method="POST" enctype="multipart/form-data" id="umkmForm">
+            <div class="form-group">
+              <label for="nama" class="form-label">
+                <i class="fas fa-store"></i>
+                Nama UMKM
+              </label>
+              <input type="text" id="nama" name="nama" class="form-control" 
+                     value="<?= htmlspecialchars($umkm_data['nama']) ?>" 
+                     placeholder="Masukkan nama UMKM" required />
+            </div>
+
+            <div class="form-group">
+              <label for="deskripsi" class="form-label">
+                <i class="fas fa-align-left"></i>
+                Deskripsi UMKM
+              </label>
+              <textarea id="deskripsi" name="deskripsi" class="form-control" 
+                        placeholder="Deskripsikan produk dan keunggulan UMKM..." required><?= htmlspecialchars($umkm_data['deskripsi']) ?></textarea>
+              <div class="form-text">
+                <i class="fas fa-info-circle"></i>
+                Berikan deskripsi yang menarik tentang produk dan layanan UMKM
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="gambar" class="form-label">
+                <i class="fas fa-image"></i>
+                Gambar UMKM
+              </label>
+              
+              <?php if (!empty($umkm_data['gambar'])): ?>
+                <div class="current-image">
+                  <p><i class="fas fa-image"></i>Gambar saat ini:</p>
+                  <img src="uploads/<?= htmlspecialchars($umkm_data['gambar']) ?>" alt="Gambar Saat Ini">
+                </div>
+              <?php endif; ?>
+              
+              <div class="file-input-wrapper">
+                <input type="file" id="gambar" name="gambar" accept="image/*" class="file-input-custom" />
+                <label for="gambar" id="fileLabel" class="file-input-label">
+                  <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                  <div>
+                    <strong>Klik untuk upload gambar baru</strong><br>
+                    <span>atau drag & drop file di sini</span>
+                  </div>
+                </label>
+              </div>
+              <div class="form-text">
+                <i class="fas fa-info-circle"></i>
+                Biarkan kosong jika tidak ingin mengubah gambar. Format: JPG, JPEG, PNG, GIF (maksimal 5MB)
+              </div>
+            </div>
+
+            <button type="submit" name="submit" class="submit-btn">
+              <i class="fas fa-save"></i>
+              Simpan Perubahan
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('gambar');
+    const fileLabel = document.getElementById('fileLabel') || document.querySelector('.file-input-label');
+
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            updateFileLabel(file.name);
+        }
+    });
+
+    fileLabel.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.style.borderColor = 'var(--primary-dark)';
+        this.style.background = 'rgba(40, 167, 69, 0.2)';
+    });
+
+    fileLabel.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        this.style.borderColor = 'var(--primary-color)';
+        this.style.background = 'var(--secondary-color)';
+    });
+
+    fileLabel.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.style.borderColor = 'var(--primary-color)';
+        this.style.background = 'var(--secondary-color)';
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            updateFileLabel(files[0].name);
+        }
+    });
+
+    function updateFileLabel(fileName) {
+        fileLabel.innerHTML = `
+            <i class="fas fa-check-circle" style="color: var(--success-color);"></i>
+            <div><strong>File terpilih:</strong><br><span>${fileName}</span></div>
+        `;
+        fileLabel.style.borderColor = 'var(--success-color)';
+        fileLabel.style.background = 'rgba(40, 167, 69, 0.1)';
+    }
+});
+</script>
+</body>
+</html>
